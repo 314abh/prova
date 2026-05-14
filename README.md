@@ -12,6 +12,5 @@ testing framework itself and bend it according to their needs.
 
 **Copyright**
 
-Licensed under the Apache License 2.0  
-Copyright 2026 Abhigyan Kumar <314abh [at] gmail [dot] com>
+Apache License v2.0. Copyright (c) 2026 Abhigyan Kumar \<314abh+source@gmail.com\>.
 
