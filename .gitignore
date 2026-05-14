@@ -1,0 +1,17 @@
+# ignore everything
+*
+
+# except ...
+!.gitignore
+
+!LICENSE
+!README.org
+
+!src/
+
+!*.c
+!*.h
+!*.cpp
+!*.hpp
+
+

@@ -1,0 +1,5 @@
+Unit testing framework for C. The focus is on simplicity and
+flexibility, enough that on can edit the source files of the unit
+testing framework itself and bend it according to their needs.
+
+Licensed under the Apache License v2.0
