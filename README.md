@@ -10,6 +10,8 @@ testing framework itself and bend it according to their needs.
 - [ ] cross-platform (soon to come ...)
 - [ ] works for C++ projects too (soom to come ...)
 
-Licensed under the Apache License 2.0 
+**Copyright**
+
+Licensed under the Apache License 2.0  
 Copyright 2026 Abhigyan Kumar <314abh [at] gmail [dot] com>
 
