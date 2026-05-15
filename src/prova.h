@@ -112,6 +112,24 @@ static inline void prova_fail(uint32_t line, const char *file, const char *expr)
 #define PROVA_ASSERT_NULL(ptr) PROVA_ASSERT((ptr) == NULL)
 #define PROVA_ASSERT_NOT_NULL(ptr) PROVA_ASSERT((ptr) != NULL)
 
+#define PROVA_ASSERT_EQUAL_PTR(expected, actual)                                                                       \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        if ((void *)(expected) != (void *)(actual))                                                                    \
+        {                                                                                                              \
+            prova_fail(__LINE__, __FILE__, #actual " == " #expected);                                                  \
+        }                                                                                                              \
+    } while (0)
+
+#define PROVA_ASSERT_NOT_EQUAL_PTR(expected, actual)                                                                   \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        if ((void *)(expected) == (void *)(actual))                                                                    \
+        {                                                                                                              \
+            prova_fail(__LINE__, __FILE__, #actual " != " #expected);                                                  \
+        }                                                                                                              \
+    } while (0)
+
 #define PROVA_ASSERT_EQUAL_INT(expected, actual)                                                                       \
     do                                                                                                                 \
     {                                                                                                                  \
