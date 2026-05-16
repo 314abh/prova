@@ -123,9 +123,15 @@ static inline void prova_fail(uint32_t line, const char *file, const char *expr)
         }                                                                                                              \
     } while (0)
 
-/* forced assertions */
-#define PROVA_ASSERT_TRUE(expr) PROVA_ASSERT((expr) != 0)
-#define PROVA_ASSERT_FALSE(expr) PROVA_ASSERT((expr) == 0)
+/* Forced assertions for immediate failures.
+ *
+ * PROVA_ASSERT_TRUE(expr): fails if @expr is false.
+ * PROVA_ASSERT_FALSE(expr): fails if @expr is true.
+ * PROVA_ASSERT_NULL(ptr): fails if @ptr is not NULL.
+ * PROVA_ASSERT_NOT_NULL(ptr): fails if @ptr is NULL.
+ */
+#define PROVA_ASSERT_TRUE(expr) PROVA_ASSERT((expr) != false)
+#define PROVA_ASSERT_FALSE(expr) PROVA_ASSERT((expr) == false)
 #define PROVA_ASSERT_NULL(ptr) PROVA_ASSERT((ptr) == NULL)
 #define PROVA_ASSERT_NOT_NULL(ptr) PROVA_ASSERT((ptr) != NULL)
 
