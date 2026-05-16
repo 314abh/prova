@@ -3,18 +3,18 @@
 
 PTEST(addition)
 {
-    PROVA_ASSERT_EQUAL_INT(0, addition(0, 0));
-    PROVA_ASSERT_EQUAL_INT(0, addition(1, -1));
-    PROVA_ASSERT_EQUAL_INT(10, addition(0, 10));
-    PROVA_ASSERT_EQUAL_INT(25, addition(12, 13));
+    PROVA_ASSERT_EQUAL(0, addition(0, 0));
+    PROVA_ASSERT_EQUAL(0, addition(1, -1));
+    PROVA_ASSERT_EQUAL(10, addition(0, 10));
+    PROVA_ASSERT_EQUAL(25, addition(12, 13));
 }
 
 PTEST(product)
 {
-    PROVA_ASSERT_EQUAL_INT(0, product(0, 0));
-    PROVA_ASSERT_EQUAL_INT(1, product(-1, -1));
-    PROVA_ASSERT_EQUAL_INT(200, product(20, 10));
-    PROVA_ASSERT_EQUAL_INT(-200, product(-20, 10));
+    PROVA_ASSERT_EQUAL(0, product(0, 0));
+    PROVA_ASSERT_EQUAL(1, product(-1, -1));
+    PROVA_ASSERT_EQUAL(200, product(20, 10));
+    PROVA_ASSERT_EQUAL(-200, product(-20, 10));
 }
 
 PTEST(average)

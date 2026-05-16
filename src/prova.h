@@ -1,17 +1,33 @@
+/* Copyright 2026 Abhigyan Kumar Abhigyan Kumar <314abh at gmail dot com>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #ifndef PROVA_H
 #define PROVA_H
 
 #include <math.h>
+#include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 #include <threads.h>
-#include <stdbool.h>
-#include <stdio.h>
 #include <time.h>
 
 /* === CONSTANTS START === */
 
 #define PROVA_FAIL_MSG_MAX 512
+#define PROVA_ASSERT_ARRAY_BUFFER 1024
 #ifndef PROVA_FLOAT_EPSILON
 #define PROVA_FLOAT_EPSILON 10e-5
 #endif /* PROVA_FLOAT_EPSILON */
@@ -88,16 +104,16 @@ void prova_cleanup_messages(const PTest *registry);
 
 /* === COMMON ASSERTION MACROS START === */
 
-static inline void prova_fail(uint32_t line, const char *file, const char *expr) {
+/* helper function for assertions. all asserts direct to this to record failures. */
+static inline void prova_fail(uint32_t line, const char *file, const char *expr)
+{
     if (p_assert_ctx == NULL)
         return;
     p_assert_ctx->fail_line = line;
     p_assert_ctx->status = TEST_FAIL;
-    snprintf(p_assert_ctx->fail_msg, PROVA_FAIL_MSG_MAX,
-                 "%s:%d: %s", file, line, expr);
+    snprintf(p_assert_ctx->fail_msg, PROVA_FAIL_MSG_MAX, "%s:%d: %s", file, line, expr);
 }
 
-/* Always returns a failing case. */
 #define PROVA_ASSERT(expr)                                                                                             \
     do                                                                                                                 \
     {                                                                                                                  \
@@ -107,6 +123,7 @@ static inline void prova_fail(uint32_t line, const char *file, const char *expr)
         }                                                                                                              \
     } while (0)
 
+/* forced assertions */
 #define PROVA_ASSERT_TRUE(expr) PROVA_ASSERT((expr) != 0)
 #define PROVA_ASSERT_FALSE(expr) PROVA_ASSERT((expr) == 0)
 #define PROVA_ASSERT_NULL(ptr) PROVA_ASSERT((ptr) == NULL)
@@ -130,7 +147,7 @@ static inline void prova_fail(uint32_t line, const char *file, const char *expr)
         }                                                                                                              \
     } while (0)
 
-#define PROVA_ASSERT_EQUAL_INT(expected, actual)                                                                       \
+#define PROVA_ASSERT_EQUAL(expected, actual)                                                                           \
     do                                                                                                                 \
     {                                                                                                                  \
         if (expected != actual)                                                                                        \
@@ -139,7 +156,7 @@ static inline void prova_fail(uint32_t line, const char *file, const char *expr)
         }                                                                                                              \
     } while (0)
 
-#define PROVA_ASSERT_NOT_EQUAL_INT(expected, actual)                                                                   \
+#define PROVA_ASSERT_NOT_EQUAL(expected, actual)                                                                       \
     do                                                                                                                 \
     {                                                                                                                  \
         if (expected == actual)                                                                                        \
@@ -157,12 +174,30 @@ static inline void prova_fail(uint32_t line, const char *file, const char *expr)
         }                                                                                                              \
     } while (0)
 
+#define PROVA_ASSERT_GREATER_EQUAL_THAN(threshold, actual)                                                             \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        if (!((actual) >= (threshold)))                                                                                \
+        {                                                                                                              \
+            prova_fail(__LINE__, __FILE__, #actual " >= " #threshold);                                                 \
+        }                                                                                                              \
+    } while (0)
+
 #define PROVA_ASSERT_LESS_THAN(threshold, actual)                                                                      \
     do                                                                                                                 \
     {                                                                                                                  \
         if (!((actual) < (threshold)))                                                                                 \
         {                                                                                                              \
             prova_fail(__LINE__, __FILE__, #actual " < " #threshold);                                                  \
+        }                                                                                                              \
+    } while (0)
+
+#define PROVA_ASSERT_LESS_EQUAL_THAN(threshold, actual)                                                                \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        if (!((actual) <= (threshold)))                                                                                \
+        {                                                                                                              \
+            prova_fail(__LINE__, __FILE__, #actual " <= " #threshold);                                                 \
         }                                                                                                              \
     } while (0)
 
@@ -184,16 +219,19 @@ static inline void prova_fail(uint32_t line, const char *file, const char *expr)
     } while (0)
 
 #define PROVA_ASSERT_NOT_EQUAL_FLOAT(expected, actual)                                                                 \
+    PROVA_ASSERT_NOT_EQUAL_FLOAT_WITHIN(PROVA_FLOAT_EPSILON, (expected), (actual))
+
+#define PROVA_ASSERT_NOT_EQUAL_FLOAT_WITHIN(delta, expected, actual)                                                   \
     do                                                                                                                 \
     {                                                                                                                  \
         float _e = (float)(expected);                                                                                  \
         float _a = (float)(actual);                                                                                    \
         float _diff = fabsf(_a - _e);                                                                                  \
         float _max = fmaxf(fabsf(_e), fabsf(_a));                                                                      \
-        bool _ok = (_max == 0.0f) ? (_diff > PROVA_FLOAT_EPSILON) : (_diff > PROVA_FLOAT_EPSILON * _max);              \
+        bool _ok = (_max == 0.0f) ? (_diff > (delta)) : (_diff > (delta) * _max);                                      \
         if (!_ok)                                                                                                      \
         {                                                                                                              \
-            prova_fail(__LINE__, __FILE__, #actual " !~= " #expected);                                                 \
+            prova_fail(__LINE__, __FILE__, #actual " !~= " #expected " (±" #delta ")");                                \
         }                                                                                                              \
     } while (0)
 
@@ -209,6 +247,21 @@ static inline void prova_fail(uint32_t line, const char *file, const char *expr)
         }                                                                                                              \
     } while (0)
 
+#define PROVA_ASSERT_EQUAL_STRING_LENGTH(expected, actual)                                                             \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        const char *_e = (expected);                                                                                   \
+        const char *_a = (actual);                                                                                     \
+        bool _ok = (strlen(expected) == strlen(actual));                                                               \
+        if (!_ok)                                                                                                      \
+        {                                                                                                              \
+            prova_fail(__LINE__, __FILE__,                                                                             \
+                       "strlen(" #actual ")"                                                                           \
+                       " == "                                                                                          \
+                       "strlen(" #expected ")");                                                                       \
+        }                                                                                                              \
+    } while (0)
+
 #define PROVA_ASSERT_NOT_EQUAL_STRING(expected, actual)                                                                \
     do                                                                                                                 \
     {                                                                                                                  \
@@ -221,7 +274,78 @@ static inline void prova_fail(uint32_t line, const char *file, const char *expr)
         }                                                                                                              \
     } while (0)
 
+#define PROVA_ASSERT_NOT_EQUAL_STRING_LENGTH(expected, actual)                                                         \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        const char *_e = (expected);                                                                                   \
+        const char *_a = (actual);                                                                                     \
+        bool _ok = (strlen(expected) != strlen(actual));                                                               \
+        if (!_ok)                                                                                                      \
+        {                                                                                                              \
+            prova_fail(__LINE__, __FILE__,                                                                             \
+                       "strlen(" #actual ")"                                                                           \
+                       " != "                                                                                          \
+                       "strlen(" #expected ")");                                                                       \
+        }                                                                                                              \
+    } while (0)
 
+#define PROVA_ASSERT_EQUAL_ARRAYS(expected, actual, n)                                                                 \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        char _prova_array_assert_buffer[PROVA_ASSERT_ARRAY_BUFFER];                                                    \
+        for (size_t i = 0; i < n; ++i)                                                                                 \
+        {                                                                                                              \
+            if (expected[i] != actual[i])                                                                              \
+            {                                                                                                          \
+                snprintf(_prova_array_assert_buffer, PROVA_ASSERT_ARRAY_BUFFER,                                        \
+                         #actual "[%zu]"                                                                               \
+                                 " == " #expected "[%zu]",                                                             \
+                         i, i);                                                                                        \
+                prova_fail(__LINE__, __FILE__, _prova_array_assert_buffer);                                            \
+            }                                                                                                          \
+        }                                                                                                              \
+    } while (0);
+
+#define PROVA_ASSERT_NOT_EQUAL_ARRAYS(expected, actual, n)                                                             \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        char _prova_array_assert_buffer[PROVA_ASSERT_ARRAY_BUFFER];                                                    \
+        for (size_t i = 0; i < n; ++i)                                                                                 \
+        {                                                                                                              \
+            if (expected[i] == actual[i])                                                                              \
+            {                                                                                                          \
+                snprintf(_prova_array_assert_buffer, PROVA_ASSERT_ARRAY_BUFFER,                                        \
+                         #actual "[%zu]"                                                                               \
+                                 " != " #expected "[%zu]",                                                             \
+                         i, i);                                                                                        \
+                prova_fail(__LINE__, __FILE__, _prova_array_assert_buffer);                                            \
+            }                                                                                                          \
+        }                                                                                                              \
+    } while (0)
+
+#define PROVA_ASSERT_EQUAL_MEMORY(expected, actual, n)                                                                 \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        if (memcmp(expected, actual, n) != 0)                                                                          \
+        {                                                                                                              \
+            prova_fail(__LINE__, __FILE__,                                                                             \
+                       "#actual"                                                                                       \
+                       " == "                                                                                          \
+                       "#expected");                                                                                   \
+        }                                                                                                              \
+    } while (0);
+
+#define PROVA_ASSERT_NOT_EQUAL_MEMORY(expected, actual, n)                                                             \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        if (memcmp(expected, actual, n) == 0)                                                                          \
+        {                                                                                                              \
+            prova_fail(__LINE__, __FILE__,                                                                             \
+                       "#actual"                                                                                       \
+                       " != "                                                                                          \
+                       "#expected");                                                                                   \
+        }                                                                                                              \
+    } while (0);
 
 /* ===  COMMON ASSERTION MACROS END  === */
 
