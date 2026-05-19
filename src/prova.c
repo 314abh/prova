@@ -24,9 +24,9 @@
 #include "prova.h"
 
 /* global structs */
-PMeta p_metadata = {0};
-PTest *p_registry = NULL;
-thread_local PAssertCtx *p_assert_ctx = NULL;
+PMeta p_metadata;
+PTest *p_registry;
+thread_local PAssertCtx *p_assert_ctx;
 
 /* TODO: implement cleaner method to report errors related to pipes and forks.
  */
