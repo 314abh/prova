@@ -60,7 +60,6 @@ typedef struct PMeta
     unsigned int failing_tests;
     unsigned int crashing_tests;
     unsigned int skipping_tests;
-    float execution_seconds;
     time_t execution_time;
 } PMeta;
 
