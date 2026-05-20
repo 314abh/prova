@@ -147,26 +147,23 @@ static const char *prova_test_summary(PTest *test, char buffer[], size_t buffer_
 {
     size_t print_size;
     const char ellipsis[] = "...";
+    const char *tag;
     switch (test->status)
     {
-    case TEST_FAIL:
-        print_size = snprintf(buffer, buffer_size, PROVA_FAILED_TAG " unit %s : %s\n", test->name, test->msg);
-        break;
-    case TEST_CRASH:
-        print_size = snprintf(buffer, buffer_size, PROVA_CRASHED_TAG " unit %s : %s\n", test->name, test->msg);
-        break;
-    case TEST_SKIP:
-        print_size = snprintf(buffer, buffer_size, PROVA_SKIPPED_TAG " unit %s : %s\n", test->name, test->msg);
-        break;
-    case TEST_PASS:
-        print_size = snprintf(buffer, buffer_size, PROVA_PASSED_TAG " unit %s : %s\n", test->name, test->msg);
-        break;
-    case TEST_PENDING:
-        print_size = snprintf(buffer, buffer_size, PROVA_PENDING_TAG " unit %s : %s\n", test->name, test->msg);
-        break;
+    case TEST_FAIL:    tag = PROVA_FAILED_TAG;   break;
+    case TEST_CRASH:   tag = PROVA_CRASHED_TAG;  break;
+    case TEST_SKIP:    tag = PROVA_SKIPPED_TAG;  break;
+    case TEST_PASS:    tag = PROVA_PASSED_TAG;   break;
+    case TEST_PENDING: tag = PROVA_PENDING_TAG;  break;
     default:
         assert(false && "couldn't validate test status.");
+        return buffer;
     }
+
+    if (test->msg)
+        print_size = snprintf(buffer, buffer_size, "%s unit %s : %s\n", tag, test->name, test->msg);
+    else
+        print_size = snprintf(buffer, buffer_size, "%s unit %s\n", tag, test->name);
 
     if (print_size >= buffer_size)
     {
