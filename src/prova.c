@@ -52,7 +52,8 @@ void prova_run_tests(PTest *registry)
             close(pipefd[0]);
 
             /* execute test function within local context. assume passing by default. */
-            PAssertCtx local_ctx = {TEST_PASS, 0, {0}};
+            PAssertCtx local_ctx;
+            memset(&local_ctx, 0, sizeof(local_ctx));
             p_assert_ctx = &local_ctx;
             curr->function();
 
@@ -63,8 +64,8 @@ void prova_run_tests(PTest *registry)
         else
         {
             close(pipefd[1]);
-            // PStatus test_result;
-            PAssertCtx local_ctx = {0};
+            PAssertCtx local_ctx;
+            memset(&local_ctx, 0, sizeof(local_ctx));
             ssize_t n = read(pipefd[0], &local_ctx, sizeof(local_ctx));
             close(pipefd[0]);
 
