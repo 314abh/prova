@@ -22,11 +22,14 @@
 #include <unistd.h>
 
 #include "prova.h"
+#include "prova_defs.h"
 
 /* global structs */
 PMeta p_metadata;
 PTest *p_registry;
 thread_local PAssertCtx *p_assert_ctx;
+
+static const char *prova_test_summary(PTest *test, char buffer[], size_t buffer_size);
 
 /* TODO: implement cleaner method to report errors related to pipes and forks.
  */
@@ -61,7 +64,7 @@ void prova_run_tests(PTest *registry)
         {
             close(pipefd[1]);
             // PStatus test_result;
-            PAssertCtx local_ctx = { 0 };
+            PAssertCtx local_ctx = {0};
             ssize_t n = read(pipefd[0], &local_ctx, sizeof(local_ctx));
             close(pipefd[0]);
 
@@ -81,10 +84,14 @@ void prova_run_tests(PTest *registry)
             {
                 curr->status = TEST_FAIL;
                 p_metadata.failing_tests++;
-                char *s = (char *) malloc(PROVA_FAIL_MSG_MAX);
+                char *s = (char *)malloc(PROVA_FAIL_MSG_MAX);
                 strncpy(s, local_ctx.fail_msg, PROVA_FAIL_MSG_MAX);
                 curr->msg = s;
             }
+
+            char print_msg_buffer[5000 + sizeof(curr->msg)];
+            prova_test_summary(curr, print_msg_buffer, sizeof(print_msg_buffer));
+            printf("%s", print_msg_buffer);
         }
 
         curr = curr->next;
@@ -104,37 +111,8 @@ size_t prova_count_tests(const PTest *registry)
     return total;
 }
 
-void prova_print_summary(const PTest *registry)
+void prova_print_summary()
 {
-    if (registry == NULL)
-    {
-        fprintf(stderr, "prova: no test cases provided.");
-        return;
-    }
-
-    const PTest *curr = registry;
-    while (curr)
-    {
-        switch (curr->status)
-        {
-        case TEST_FAIL:
-            fprintf(stderr, "[FAILED] unit %s : %s\n", curr->name, curr->msg);
-            break;
-        case TEST_CRASH:
-            fprintf(stderr, "[CRASHED] unit %s : %s\n", curr->name, curr->msg);
-            break;
-        case TEST_PENDING:
-            fprintf(stderr, "[PENDING] unit %s : %s\n", curr->name, curr->msg);
-            break;
-        case TEST_SKIP:
-            fprintf(stderr, "[SKIPPED] unit %s : %s\n", curr->name, curr->msg);
-            break;
-        default:
-            break;
-        }
-        curr = curr->next;
-    }
-
     printf("\n=== SUMMARY ===\n");
     printf("Total testcases: %u\n", p_metadata.total_tests);
     printf("Failing testcases: %u\n", p_metadata.failing_tests);
@@ -143,13 +121,49 @@ void prova_print_summary(const PTest *registry)
     printf("Passing ratio: %u/%u\n", p_metadata.passing_tests, p_metadata.total_tests);
 }
 
-void prova_cleanup_messages(const PTest *registry) {
+void prova_cleanup_messages(const PTest *registry)
+{
     const PTest *curr = registry;
-    while (curr) {
+    while (curr)
+    {
         PTest *next = curr->next;
         free(curr->msg);
         curr = next;
     }
+}
+
+static const char *prova_test_summary(PTest *test, char buffer[], size_t buffer_size)
+{
+    size_t print_size;
+    const char ellipsis[] = "...";
+    switch (test->status)
+    {
+    case TEST_FAIL:
+        print_size = snprintf(buffer, buffer_size, PROVA_FAILED_TAG " unit %s : %s\n", test->name, test->msg);
+        break;
+    case TEST_CRASH:
+        print_size = snprintf(buffer, buffer_size, PROVA_CRASHED_TAG " unit %s : %s\n", test->name, test->msg);
+        break;
+    case TEST_SKIP:
+        print_size = snprintf(buffer, buffer_size, PROVA_SKIPPED_TAG " unit %s : %s\n", test->name, test->msg);
+        break;
+    case TEST_PASS:
+        print_size = snprintf(buffer, buffer_size, PROVA_PASSED_TAG " unit %s : %s\n", test->name, test->msg);
+        break;
+    case TEST_PENDING:
+        print_size = snprintf(buffer, buffer_size, PROVA_PENDING_TAG " unit %s : %s\n", test->name, test->msg);
+        break;
+    default:
+        assert(false && "couldn't validate test status.");
+    }
+
+    if (print_size >= buffer_size)
+    {
+        /* + 2 for null-terminator and newline. */
+        strncpy(buffer + (buffer_size - (sizeof(ellipsis) + 2)), ellipsis, sizeof(ellipsis));
+    }
+
+    return buffer;
 }
 
 #ifndef PROVA_MAIN
@@ -158,7 +172,7 @@ void prova_cleanup_messages(const PTest *registry) {
 int main(void)
 {
     prova_run_tests(p_registry);
-    prova_print_summary(p_registry);
+    prova_print_summary();
     return (p_metadata.failing_tests + p_metadata.crashing_tests) > 0 ? 1 : 0;
 }
 
