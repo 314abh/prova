@@ -20,9 +20,12 @@ PTEST(product)
 PTEST(average)
 {
     PROVA_ASSERT_EQUAL_FLOAT(2.0f, average(3, 1.0f, 2.0f, 3.0f));
+    int *ptr = NULL;
+    int value = *ptr;
+    PROVA_ASSERT_FALSE(2 == 2);
 }
 
-PTEST(to_lowercase)
+PTEST_SKIP(to_lowercase)
 {
     char sample[] = "lower";
     PROVA_ASSERT_EQUAL_STRING("lower", to_lowercase(sample));

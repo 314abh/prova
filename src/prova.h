@@ -24,21 +24,13 @@
 #include <threads.h>
 #include <time.h>
 
-/* === CONSTANTS START === */
-
-#define PROVA_FAIL_MSG_MAX 512
-#define PROVA_ASSERT_ARRAY_BUFFER 1024
-
-#ifndef PROVA_FLOAT_EPSILON
-#define PROVA_FLOAT_EPSILON 10e-5
-#endif /* PROVA_FLOAT_EPSILON */
-
-/* ===  CONSTANTS END  === */
+#include "prova_defs.h"
 
 typedef enum PStatus
 {
-    TEST_FAIL,
+    /* TEST_PASS should be zero valued, otherwise memset on local_ctx fails in prova_run_tests */
     TEST_PASS,
+    TEST_FAIL,
     TEST_SKIP,
     TEST_CRASH,
     TEST_PENDING
@@ -83,18 +75,22 @@ extern PMeta p_metadata;
 extern PTest *p_registry;
 extern thread_local PAssertCtx *p_assert_ctx;
 
+void prova_print_summary();
 void prova_run_tests(PTest *registry);
 size_t prova_count_tests(const PTest *registry);
-void prova_print_summary(const PTest *registry);
 void prova_cleanup_messages(const PTest *registry);
 
-#define PTEST(f_name) PTEST_MESSAGE(f_name, NULL)
-#define PTEST_MESSAGE(f_name, message)                                                                                 \
+#define PTEST(f_name) PTEST_REGISTER(f_name, NULL, TEST_PENDING)
+#define PTEST_SKIP(f_name) PTEST_REGISTER(f_name, NULL, TEST_SKIP)
+#define PTEST_MESSAGE(f_name, message) PTEST_REGISTER(f_name, message, TEST_PENDING)
+#define PTEST_MESSAGE_SKIP(f_name, message) PTEST_REGISTER(f_name, message, TEST_SKIP)
+
+#define PTEST_REGISTER(f_name, message, test_flag)                                                                     \
     void test_function_##f_name(void);                                                                                 \
     __attribute__((constructor)) void register_##f_name(void)                                                          \
     {                                                                                                                  \
         static PTest t;                                                                                                \
-        t.status = TEST_PENDING;                                                                                       \
+        t.status = test_flag;                                                                                          \
         t.msg = message;                                                                                               \
         t.name = #f_name;                                                                                              \
         t.function = test_function_##f_name;                                                                           \
