@@ -28,8 +28,9 @@
 
 typedef enum PStatus
 {
-    TEST_FAIL,
+    /* TEST_PASS should be zero valued, otherwise memset on local_ctx fails in prova_run_tests */
     TEST_PASS,
+    TEST_FAIL,
     TEST_SKIP,
     TEST_CRASH,
     TEST_PENDING

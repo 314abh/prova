@@ -41,6 +41,16 @@ void prova_run_tests(PTest *registry)
 
     while (curr)
     {
+        if (curr->status == TEST_SKIP)
+        {
+            p_metadata.skipping_tests++;
+            char print_msg_buffer[5000 + sizeof(curr->msg)];
+            prova_test_summary(curr, print_msg_buffer, sizeof(print_msg_buffer));
+            fputs(print_msg_buffer, stdout);
+            curr = curr->next;
+            continue;
+        }
+
         int pipefd[2];
         assert((pipe(pipefd) != -1) && "pipe: couldn't create pipe for new child process.");
 
@@ -92,7 +102,7 @@ void prova_run_tests(PTest *registry)
 
             char print_msg_buffer[5000 + sizeof(curr->msg)];
             prova_test_summary(curr, print_msg_buffer, sizeof(print_msg_buffer));
-            printf("%s", print_msg_buffer);
+            fputs(print_msg_buffer, stdout);
         }
 
         curr = curr->next;

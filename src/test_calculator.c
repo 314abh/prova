@@ -25,7 +25,7 @@ PTEST(average)
     PROVA_ASSERT_FALSE(2 == 2);
 }
 
-PTEST(to_lowercase)
+PTEST_SKIP(to_lowercase)
 {
     char sample[] = "lower";
     PROVA_ASSERT_EQUAL_STRING("lower", to_lowercase(sample));
