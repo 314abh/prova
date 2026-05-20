@@ -14,11 +14,13 @@
  */
 
 #include <assert.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/wait.h>
 #include <threads.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "prova.h"
@@ -124,7 +126,8 @@ size_t prova_count_tests(const PTest *registry)
 
 void prova_print_summary()
 {
-    printf("\n=== SUMMARY ===\n");
+    printf(PROVA_ANSI_BOLD "\nSummary for test builds started on %s" PROVA_ANSI_RESET, ctime(&p_metadata.execution_time));
+
     printf("Total testcases: %u\n", p_metadata.total_tests);
     printf("Failing testcases: %u\n", p_metadata.failing_tests);
     printf("Skipped testcases: %u\n", p_metadata.skipping_tests);
@@ -150,20 +153,30 @@ static const char *prova_test_summary(PTest *test, char buffer[], size_t buffer_
     const char *tag;
     switch (test->status)
     {
-    case TEST_FAIL:    tag = PROVA_FAILED_TAG;   break;
-    case TEST_CRASH:   tag = PROVA_CRASHED_TAG;  break;
-    case TEST_SKIP:    tag = PROVA_SKIPPED_TAG;  break;
-    case TEST_PASS:    tag = PROVA_PASSED_TAG;   break;
-    case TEST_PENDING: tag = PROVA_PENDING_TAG;  break;
+    case TEST_FAIL:
+        tag = PROVA_FAILED_TAG;
+        break;
+    case TEST_CRASH:
+        tag = PROVA_CRASHED_TAG;
+        break;
+    case TEST_SKIP:
+        tag = PROVA_SKIPPED_TAG;
+        break;
+    case TEST_PASS:
+        tag = PROVA_PASSED_TAG;
+        break;
+    case TEST_PENDING:
+        tag = PROVA_PENDING_TAG;
+        break;
     default:
         assert(false && "couldn't validate test status.");
         return buffer;
     }
 
     if (test->msg)
-        print_size = snprintf(buffer, buffer_size, "%s unit %s : %s\n", tag, test->name, test->msg);
+        print_size = snprintf(buffer, buffer_size, "%s %s : %s\n", tag, test->name, test->msg);
     else
-        print_size = snprintf(buffer, buffer_size, "%s unit %s\n", tag, test->name);
+        print_size = snprintf(buffer, buffer_size, "%s %s\n", tag, test->name);
 
     if (print_size >= buffer_size)
     {
@@ -179,7 +192,9 @@ static const char *prova_test_summary(PTest *test, char buffer[], size_t buffer_
 
 int main(void)
 {
+    time(&p_metadata.execution_time);
     prova_run_tests(p_registry);
+
     prova_print_summary();
     return (p_metadata.failing_tests + p_metadata.crashing_tests) > 0 ? 1 : 0;
 }
