@@ -13,178 +13,261 @@
  * limitations under the License.
  */
 
-#include <assert.h>
-#include <math.h>
+#include <setjmp.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/wait.h>
 #include <threads.h>
-#include <time.h>
-#include <unistd.h>
 
 #include "prova.h"
 #include "prova_defs.h"
 
-/* global structs */
-PMeta p_metadata;
+/* global registry (built at static-init time, read-only after main) */
 PTest *p_registry;
-thread_local PAssertCtx *p_assert_ctx;
 
-static const char *prova_test_summary(PTest *test, char buffer[], size_t buffer_size);
+/* per-thread pointer to the currently executing PTest */
+_Thread_local PTest *p_current_test;
 
-/* TODO: implement cleaner method to report errors related to pipes and forks.
- */
+/* per-thread crash recovery jump buffer */
+static _Thread_local sigjmp_buf prova_crash_jmp;
+
+/* per-thread flag: did we already longjmp? prevents re-entrant handlers */
+static _Thread_local int prova_crashed;
+
+static void prova_crash_handler(int sig)
+{
+    if (p_current_test && !prova_crashed)
+    {
+        prova_crashed = 1;
+        p_current_test->status = TEST_CRASH;
+        if (sig == SIGSEGV)
+            snprintf(p_current_test->fail_msg, PROVA_FAIL_MSG_MAX,
+                     "SIGSEGV (invalid memory access)");
+        else if (sig == SIGFPE)
+            snprintf(p_current_test->fail_msg, PROVA_FAIL_MSG_MAX,
+                     "SIGFPE (floating-point exception)");
+        else if (sig == SIGILL)
+            snprintf(p_current_test->fail_msg, PROVA_FAIL_MSG_MAX,
+                     "SIGILL (illegal instruction)");
+        else if (sig == SIGABRT)
+            snprintf(p_current_test->fail_msg, PROVA_FAIL_MSG_MAX,
+                     "SIGABRT (aborted)");
+        else if (sig == SIGBUS)
+            snprintf(p_current_test->fail_msg, PROVA_FAIL_MSG_MAX,
+                     "SIGBUS (bus error)");
+        else
+            snprintf(p_current_test->fail_msg, PROVA_FAIL_MSG_MAX,
+                     "signal %d", sig);
+    }
+
+    /* restore default and re-raise so the whole process dies if we somehow
+     * return from longjmp handler. The longjmp below should normally prevent
+     * reaching here. */
+    signal(sig, SIG_DFL);
+
+    siglongjmp(prova_crash_jmp, 1);
+}
+
+static void prova_install_crash_handlers(void)
+{
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = prova_crash_handler;
+    sigfillset(&sa.sa_mask);
+    sa.sa_flags = 0;
+
+    sigaction(SIGSEGV, &sa, NULL);
+    sigaction(SIGFPE, &sa, NULL);
+    sigaction(SIGILL, &sa, NULL);
+    sigaction(SIGABRT, &sa, NULL);
+    sigaction(SIGBUS, &sa, NULL);
+}
+
+static int prova_run_single_test(void *arg)
+{
+    PTest *test = (PTest *)arg;
+    p_current_test = test;
+    prova_crashed = 0;
+
+    prova_install_crash_handlers();
+
+    /* reset runtime state before running */
+    test->status = TEST_PASS;
+    test->assertions_head = NULL;
+    test->assertion_count = 0;
+    test->fail_msg[0] = '\0';
+
+    if (sigsetjmp(prova_crash_jmp, 1) == 0)
+    {
+        test->function();
+    }
+
+    return 0;
+}
+
 void prova_run_tests(PTest *registry)
 {
-    PTest *curr = registry;
-    size_t total_tests = prova_count_tests(curr);
-    p_metadata.total_tests = total_tests;
+    size_t total = prova_count_tests(registry);
+    if (total == 0)
+        return;
 
-    while (curr)
+    thrd_t *threads = (thrd_t *)malloc(total * sizeof(thrd_t));
+    PTest **order = (PTest **)malloc(total * sizeof(PTest *));
+
+    /* flatten linked list into ordered array */
+    size_t idx = 0;
+    for (PTest *cur = registry; cur; cur = cur->next)
+        order[idx++] = cur;
+
+    /* launch one thread per non-skipped test */
+    for (size_t i = 0; i < total; i++)
     {
-        if (curr->status == TEST_SKIP)
+        if (order[i]->status == TEST_SKIP)
         {
-            p_metadata.skipping_tests++;
-            char print_msg_buffer[5000 + sizeof(curr->msg)];
-            prova_test_summary(curr, print_msg_buffer, sizeof(print_msg_buffer));
-            fputs(print_msg_buffer, stdout);
-            curr = curr->next;
+            threads[i] = (thrd_t)0;
+            continue;
+        }
+        thrd_create(&threads[i], prova_run_single_test, order[i]);
+    }
+
+    /* collect results and print per-test summary */
+    unsigned int passed = 0, failed = 0, crashed = 0, skipped = 0;
+
+    for (size_t i = 0; i < total; i++)
+    {
+        PTest *t = order[i];
+
+        if (t->status == TEST_SKIP)
+        {
+            /* still need to print skipped tests */
+            printf(PROVA_SKIPPED_TAG " %s\n", t->name);
+            skipped++;
             continue;
         }
 
-        int pipefd[2];
-        assert((pipe(pipefd) != -1) && "pipe: couldn't create pipe for new child process.");
+        int result;
+        thrd_join(threads[i], &result);
 
-        pid_t pid = fork();
-        assert((pid >= 0) && "fork: couldn't create child process.");
-
-        if (pid == 0)
+        /* If the test didn't explicitly fail but crashed was set by handler */
+        if (t->status == TEST_CRASH)
         {
-            close(pipefd[0]);
-
-            /* execute test function within local context. assume passing by default. */
-            PAssertCtx local_ctx;
-            memset(&local_ctx, 0, sizeof(local_ctx));
-            p_assert_ctx = &local_ctx;
-            curr->function();
-
-            write(pipefd[1], p_assert_ctx, sizeof(*p_assert_ctx));
-            close(pipefd[1]);
-            _exit(local_ctx.status == TEST_PASS ? 0 : 1);
+            printf(PROVA_CRASHED_TAG " %s : %s\n", t->name, t->fail_msg);
+            crashed++;
+        }
+        else if (t->status == TEST_FAIL)
+        {
+            printf(PROVA_FAILED_TAG " %s : %s\n", t->name, t->fail_msg);
+            failed++;
         }
         else
         {
-            close(pipefd[1]);
-            PAssertCtx local_ctx;
-            memset(&local_ctx, 0, sizeof(local_ctx));
-            ssize_t n = read(pipefd[0], &local_ctx, sizeof(local_ctx));
-            close(pipefd[0]);
-
-            int wstatus;
-            waitpid(pid, &wstatus, 0);
-            if (n == sizeof(local_ctx) && local_ctx.status == TEST_PASS)
-            {
-                curr->status = TEST_PASS;
-                p_metadata.passing_tests++;
-            }
-            else if (WIFSIGNALED(wstatus))
-            {
-                curr->status = TEST_CRASH;
-                p_metadata.crashing_tests++;
-            }
-            else
-            {
-                curr->status = TEST_FAIL;
-                p_metadata.failing_tests++;
-                char *s = (char *)malloc(PROVA_FAIL_MSG_MAX);
-                strncpy(s, local_ctx.fail_msg, PROVA_FAIL_MSG_MAX);
-                curr->msg = s;
-            }
-
-            char print_msg_buffer[5000 + sizeof(curr->msg)];
-            prova_test_summary(curr, print_msg_buffer, sizeof(print_msg_buffer));
-            fputs(print_msg_buffer, stdout);
+            printf(PROVA_PASSED_TAG " %s", t->name);
+            if (t->msg)
+                printf(" : %s", t->msg);
+            printf("\n");
+            passed++;
         }
 
-        curr = curr->next;
+        /* print each assertion for this test */
+        if (t->assertions_head)
+        {
+            /* reverse the list (we prepended during recording) */
+            PAssertion *prev = NULL;
+            PAssertion *cur = t->assertions_head;
+            while (cur)
+            {
+                PAssertion *next = cur->next;
+                cur->next = prev;
+                prev = cur;
+                cur = next;
+            }
+            t->assertions_head = prev;
+
+            for (PAssertion *a = t->assertions_head; a; a = a->next)
+            {
+                if (a->status == TEST_PASS)
+                    printf("    " PROVA_ANSI_GREEN "\xe2\x9c\x93" PROVA_ANSI_RESET
+                           " %s\n",
+                           a->expression);
+                else
+                    printf("    " PROVA_ANSI_RED "\xe2\x9c\x97" PROVA_ANSI_RESET
+                           " %s  " PROVA_ANSI_RED "(line %zu)" PROVA_ANSI_RESET "\n",
+                           a->expression, a->line);
+            }
+        }
     }
+
+    free(threads);
+    free(order);
+
+    /* print final summary */
+    unsigned int total_run = passed + failed + crashed;
+    printf(PROVA_ANSI_BOLD "\nTest Summary" PROVA_ANSI_RESET "\n");
+    printf("  Total:  %zu\n", total);
+    printf("  Passed: " PROVA_ANSI_GREEN "%u" PROVA_ANSI_RESET "\n", passed);
+    printf("  Failed: " PROVA_ANSI_RED "%u" PROVA_ANSI_RESET "\n", failed);
+    printf("  Crashed: " PROVA_ANSI_MAGENTA "%u" PROVA_ANSI_RESET "\n", crashed);
+    printf("  Skipped: " PROVA_ANSI_CYAN "%u" PROVA_ANSI_RESET "\n", skipped);
+    printf("  Rate:   %u/%u\n", passed, total_run);
 }
 
 size_t prova_count_tests(const PTest *registry)
 {
-    const PTest *curr = registry;
-    size_t total = 0;
-    while (curr)
+    size_t n = 0;
+    for (const PTest *cur = registry; cur; cur = cur->next)
+        n++;
+    return n;
+}
+
+void prova_print_summary(PTest *registry)
+{
+    unsigned int total = 0, passed = 0, failed = 0, crashed = 0, skipped = 0;
+    for (const PTest *cur = registry; cur; cur = cur->next)
     {
         total++;
-        curr = curr->next;
+        switch (cur->status)
+        {
+        case TEST_PASS:
+            passed++;
+            break;
+        case TEST_FAIL:
+            failed++;
+            break;
+        case TEST_CRASH:
+            crashed++;
+            break;
+        case TEST_SKIP:
+            skipped++;
+            break;
+        default:
+            break;
+        }
     }
-
-    return total;
+    unsigned int total_run = passed + failed + crashed;
+    printf(PROVA_ANSI_BOLD "\nTest Summary" PROVA_ANSI_RESET "\n");
+    printf("  Total:   %u\n", total);
+    printf("  Passed:  " PROVA_ANSI_GREEN "%u" PROVA_ANSI_RESET "\n", passed);
+    printf("  Failed:  " PROVA_ANSI_RED "%u" PROVA_ANSI_RESET "\n", failed);
+    printf("  Crashed: " PROVA_ANSI_MAGENTA "%u" PROVA_ANSI_RESET "\n", crashed);
+    printf("  Skipped: " PROVA_ANSI_CYAN "%u" PROVA_ANSI_RESET "\n", skipped);
+    printf("  Rate:    %u/%u\n", passed, total_run);
 }
 
-void prova_print_summary()
+void prova_cleanup(PTest *registry)
 {
-    printf(PROVA_ANSI_BOLD "\nSummary for test builds started on %s" PROVA_ANSI_RESET, ctime(&p_metadata.execution_time));
-
-    printf("Total testcases: %u\n", p_metadata.total_tests);
-    printf("Failing testcases: %u\n", p_metadata.failing_tests);
-    printf("Skipped testcases: %u\n", p_metadata.skipping_tests);
-    printf("Crashing testcases: %u\n", p_metadata.crashing_tests);
-    printf("Passing ratio: %u/%u\n", p_metadata.passing_tests, p_metadata.total_tests);
-}
-
-void prova_cleanup_messages(const PTest *registry)
-{
-    const PTest *curr = registry;
-    while (curr)
+    for (PTest *cur = registry; cur; cur = cur->next)
     {
-        PTest *next = curr->next;
-        free(curr->msg);
-        curr = next;
+        PAssertion *a = cur->assertions_head;
+        while (a)
+        {
+            PAssertion *next = a->next;
+            free(a);
+            a = next;
+        }
+        cur->assertions_head = NULL;
+        cur->assertion_count = 0;
     }
-}
-
-static const char *prova_test_summary(PTest *test, char buffer[], size_t buffer_size)
-{
-    size_t print_size;
-    const char ellipsis[] = "...";
-    const char *tag;
-    switch (test->status)
-    {
-    case TEST_FAIL:
-        tag = PROVA_FAILED_TAG;
-        break;
-    case TEST_CRASH:
-        tag = PROVA_CRASHED_TAG;
-        break;
-    case TEST_SKIP:
-        tag = PROVA_SKIPPED_TAG;
-        break;
-    case TEST_PASS:
-        tag = PROVA_PASSED_TAG;
-        break;
-    case TEST_PENDING:
-        tag = PROVA_PENDING_TAG;
-        break;
-    default:
-        assert(false && "couldn't validate test status.");
-        return buffer;
-    }
-
-    if (test->msg)
-        print_size = snprintf(buffer, buffer_size, "%s %s : %s\n", tag, test->name, test->msg);
-    else
-        print_size = snprintf(buffer, buffer_size, "%s %s\n", tag, test->name);
-
-    if (print_size >= buffer_size)
-    {
-        /* + 2 for null-terminator and newline. */
-        strncpy(buffer + (buffer_size - (sizeof(ellipsis) + 2)), ellipsis, sizeof(ellipsis));
-    }
-
-    return buffer;
 }
 
 #ifndef PROVA_MAIN
@@ -192,11 +275,15 @@ static const char *prova_test_summary(PTest *test, char buffer[], size_t buffer_
 
 int main(void)
 {
-    time(&p_metadata.execution_time);
     prova_run_tests(p_registry);
-
-    prova_print_summary();
-    return (p_metadata.failing_tests + p_metadata.crashing_tests) > 0 ? 1 : 0;
+    unsigned int fail_count = 0;
+    for (PTest *cur = p_registry; cur; cur = cur->next)
+    {
+        if (cur->status == TEST_FAIL || cur->status == TEST_CRASH)
+            fail_count++;
+    }
+    prova_cleanup(p_registry);
+    return fail_count > 0 ? 1 : 0;
 }
 
 #endif /* PROVA_MAIN */
