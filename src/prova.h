@@ -83,6 +83,7 @@ static inline void prova_record_assertion(uint32_t line, const char *file, const
         return;
 
     PAssertion *a = (PAssertion *)malloc(sizeof(PAssertion));
+    memset(a, 0, sizeof(PAssertion));
     a->line = line;
     a->status = passed ? TEST_PASS : TEST_FAIL;
     a->next = p_current_test->assertions_head;
@@ -90,7 +91,6 @@ static inline void prova_record_assertion(uint32_t line, const char *file, const
     if (len >= PROVA_EXPR_LEN_MAX)
         len = PROVA_EXPR_LEN_MAX - 1;
     memcpy(a->expression, expr, len);
-    a->expression[len] = '\0';
     p_current_test->assertions_head = a;
     p_current_test->assertion_count++;
 

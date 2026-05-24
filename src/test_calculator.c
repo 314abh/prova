@@ -1,5 +1,6 @@
 #include "prova.h"
 #include "calculator.h"
+#include <unistd.h>
 
 PTEST(addition)
 {
@@ -14,6 +15,7 @@ PTEST(product)
     PROVA_ASSERT_EQUAL(0, product(0, 0));
     PROVA_ASSERT_EQUAL(1, product(-1, -1));
     PROVA_ASSERT_EQUAL(200, product(20, 10));
+    sleep(5);
     PROVA_ASSERT_EQUAL(-200, product(-20, 10));
 }
 
