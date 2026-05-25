@@ -3,23 +3,26 @@
 
 #include "prova.h"
 #include "prova_defs.h"
+
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 
 static inline void prova_record_assertion(size_t line, const char *filename,
                                           const char *expr, bool passed) {
   if (PROVA_CURRENT_TEST == NULL)
     return;
 
-  /* prepare the assertion */
+  // prepare the assertion
   ProvaAssertion assert = {0};
   assert.line = line;
   assert.status = passed ? TEST_PASS : TEST_FAIL;
   strncpy(assert.expr, expr, PROVA_EXPR_LEN_MAX);
   strncpy(assert.filename, filename, PROVA_FILENAME_MAX);
 
-  /* append the assertion to the assertions array in test case being
-     executed in the current thread */
+  // append the assertion to the assertions array in test case being
+  // executed in the current thread. PROVA_CURRENT_TEST is a thread
+  // local global state.
   ProvaTest *current_test = PROVA_CURRENT_TEST;
   stbds_arrput(current_test->asserts, assert);
 }
