@@ -8,6 +8,7 @@
 !README.md
 
 !src/
+!src/next/
 
 !*.c
 !*.h
