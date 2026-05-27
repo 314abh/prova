@@ -1,4 +1,4 @@
-/* Copyright 2026 Abhigyan Kumar Abhigyan Kumar <314abh at gmail dot com>
+/* Copyright 2026 Abhigyan Kumar <314abh at gmail dot com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,339 +16,40 @@
 #ifndef PROVA_H
 #define PROVA_H
 
-#include <math.h>
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <string.h>
-#include <threads.h>
-#include <time.h>
-
 #include "prova_defs.h"
+#include "prova_assertions.h"
 
-typedef enum PStatus
-{
-    /* TEST_PASS should be zero valued, otherwise memset on local_ctx fails in prova_run_tests */
-    TEST_PASS,
-    TEST_FAIL,
-    TEST_SKIP,
-    TEST_CRASH,
-    TEST_PENDING
-} PStatus;
+#include <threads.h>
 
-/* Metadata for a unit test scoped to a single function.
- * status: current status of the teest.
- * msg: message to be printed upon failure.
- * name: name of the function to be tested.
- * function: pointer to the test function itself.
- * next: next item in the linked list.
+/* Macros to register functions as test cases and add them to
+ * PROVA_TEST_QUEUE. There are different shortcuts to call the main
+ * PTEST_REGISTER for convinience. The PTEST_REGISTER macro takes
+ * three arguments:
+ *
+ *   - f_name is the name of the function being tested
+ *   - message is an optional comment on the test case
+ *   - test_flag can be used to bypass the default flagfor new test
+ *     cases. By default, test cases are assumed to be pending and are
+ *     assigned the TEST_PENDING flag.
  */
-typedef struct PTest
-{
-    PStatus status;
-    char *msg;
-    const char *name;
-    void (*function)(void);
-    struct PTest *next;
-} PTest;
-
-/* Global metadata on the test suite for final summary. */
-typedef struct PMeta
-{
-    unsigned int total_tests;
-    unsigned int passing_tests;
-    unsigned int failing_tests;
-    unsigned int crashing_tests;
-    unsigned int skipping_tests;
-    time_t execution_time;
-} PMeta;
-
-typedef struct __attribute__((packed)) PAssertCtx
-{
-    uint32_t status;
-    uint32_t fail_line;
-    char fail_msg[PROVA_FAIL_MSG_MAX];
-} PAssertCtx;
-
-extern PMeta p_metadata;
-extern PTest *p_registry;
-extern thread_local PAssertCtx *p_assert_ctx;
-
-void prova_print_summary();
-void prova_run_tests(PTest *registry);
-size_t prova_count_tests(const PTest *registry);
-void prova_cleanup_messages(const PTest *registry);
 
 #define PTEST(f_name) PTEST_REGISTER(f_name, NULL, TEST_PENDING)
 #define PTEST_SKIP(f_name) PTEST_REGISTER(f_name, NULL, TEST_SKIP)
-#define PTEST_MESSAGE(f_name, message) PTEST_REGISTER(f_name, message, TEST_PENDING)
-#define PTEST_MESSAGE_SKIP(f_name, message) PTEST_REGISTER(f_name, message, TEST_SKIP)
+#define PTEST_MESSAGE(f_name, message)                                         \
+  PTEST_REGISTER(f_name, message, TEST_PENDING)
+#define PTEST_MESSAGE_SKIP(f_name, message)                                    \
+  PTEST_REGISTER(f_name, message, TEST_SKIP)
 
-#define PTEST_REGISTER(f_name, message, test_flag)                                                                     \
-    void test_function_##f_name(void);                                                                                 \
-    __attribute__((constructor)) void register_##f_name(void)                                                          \
-    {                                                                                                                  \
-        static PTest t;                                                                                                \
-        t.status = test_flag;                                                                                          \
-        t.msg = message;                                                                                               \
-        t.name = #f_name;                                                                                              \
-        t.function = test_function_##f_name;                                                                           \
-        t.next = p_registry;                                                                                           \
-        p_registry = &t;                                                                                               \
-    }                                                                                                                  \
-    void test_function_##f_name(void)
-
-/* === COMMON ASSERTION MACROS START === */
-
-/* helper function for assertions. all asserts direct to this to record failures. */
-static inline void prova_fail(uint32_t line, const char *file, const char *expr)
-{
-    if (p_assert_ctx == NULL)
-        return;
-    p_assert_ctx->fail_line = line;
-    p_assert_ctx->status = TEST_FAIL;
-    snprintf(p_assert_ctx->fail_msg, PROVA_FAIL_MSG_MAX, "%s:%d: %s", file, line, expr);
-}
-
-#define PROVA_ASSERT(expr)                                                                                             \
-    do                                                                                                                 \
-    {                                                                                                                  \
-        if (!(expr))                                                                                                   \
-        {                                                                                                              \
-            prova_fail(__LINE__, __FILE__, #expr);                                                                     \
-        }                                                                                                              \
-    } while (0)
-
-/* Forced assertions for immediate failures.
- *
- * PROVA_ASSERT_TRUE(expr): fails if @expr is false.
- * PROVA_ASSERT_FALSE(expr): fails if @expr is true.
- * PROVA_ASSERT_NULL(ptr): fails if @ptr is not NULL.
- * PROVA_ASSERT_NOT_NULL(ptr): fails if @ptr is NULL.
- */
-#define PROVA_ASSERT_TRUE(expr) PROVA_ASSERT((expr) != false)
-#define PROVA_ASSERT_FALSE(expr) PROVA_ASSERT((expr) == false)
-#define PROVA_ASSERT_NULL(ptr) PROVA_ASSERT((ptr) == NULL)
-#define PROVA_ASSERT_NOT_NULL(ptr) PROVA_ASSERT((ptr) != NULL)
-
-#define PROVA_ASSERT_EQUAL_PTR(expected, actual)                                                                       \
-    do                                                                                                                 \
-    {                                                                                                                  \
-        if ((void *)(expected) != (void *)(actual))                                                                    \
-        {                                                                                                              \
-            prova_fail(__LINE__, __FILE__, #actual " == " #expected);                                                  \
-        }                                                                                                              \
-    } while (0)
-
-#define PROVA_ASSERT_NOT_EQUAL_PTR(expected, actual)                                                                   \
-    do                                                                                                                 \
-    {                                                                                                                  \
-        if ((void *)(expected) == (void *)(actual))                                                                    \
-        {                                                                                                              \
-            prova_fail(__LINE__, __FILE__, #actual " != " #expected);                                                  \
-        }                                                                                                              \
-    } while (0)
-
-#define PROVA_ASSERT_EQUAL(expected, actual)                                                                           \
-    do                                                                                                                 \
-    {                                                                                                                  \
-        if (expected != actual)                                                                                        \
-        {                                                                                                              \
-            prova_fail(__LINE__, __FILE__, #actual " == " #expected);                                                  \
-        }                                                                                                              \
-    } while (0)
-
-#define PROVA_ASSERT_NOT_EQUAL(expected, actual)                                                                       \
-    do                                                                                                                 \
-    {                                                                                                                  \
-        if (expected == actual)                                                                                        \
-        {                                                                                                              \
-            prova_fail(__LINE__, __FILE__, #actual " != " #expected);                                                  \
-        }                                                                                                              \
-    } while (0)
-
-#define PROVA_ASSERT_GREATER_THAN(threshold, actual)                                                                   \
-    do                                                                                                                 \
-    {                                                                                                                  \
-        if (!((actual) > (threshold)))                                                                                 \
-        {                                                                                                              \
-            prova_fail(__LINE__, __FILE__, #actual " > " #threshold);                                                  \
-        }                                                                                                              \
-    } while (0)
-
-#define PROVA_ASSERT_GREATER_EQUAL_THAN(threshold, actual)                                                             \
-    do                                                                                                                 \
-    {                                                                                                                  \
-        if (!((actual) >= (threshold)))                                                                                \
-        {                                                                                                              \
-            prova_fail(__LINE__, __FILE__, #actual " >= " #threshold);                                                 \
-        }                                                                                                              \
-    } while (0)
-
-#define PROVA_ASSERT_LESS_THAN(threshold, actual)                                                                      \
-    do                                                                                                                 \
-    {                                                                                                                  \
-        if (!((actual) < (threshold)))                                                                                 \
-        {                                                                                                              \
-            prova_fail(__LINE__, __FILE__, #actual " < " #threshold);                                                  \
-        }                                                                                                              \
-    } while (0)
-
-#define PROVA_ASSERT_LESS_EQUAL_THAN(threshold, actual)                                                                \
-    do                                                                                                                 \
-    {                                                                                                                  \
-        if (!((actual) <= (threshold)))                                                                                \
-        {                                                                                                              \
-            prova_fail(__LINE__, __FILE__, #actual " <= " #threshold);                                                 \
-        }                                                                                                              \
-    } while (0)
-
-#define PROVA_ASSERT_EQUAL_FLOAT(expected, actual)                                                                     \
-    PROVA_ASSERT_EQUAL_FLOAT_WITHIN(PROVA_FLOAT_EPSILON, (expected), (actual))
-
-#define PROVA_ASSERT_EQUAL_FLOAT_WITHIN(delta, expected, actual)                                                       \
-    do                                                                                                                 \
-    {                                                                                                                  \
-        float _e = (float)(expected);                                                                                  \
-        float _a = (float)(actual);                                                                                    \
-        float _diff = fabsf(_a - _e);                                                                                  \
-        float _max = fmaxf(fabsf(_e), fabsf(_a));                                                                      \
-        bool _ok = (_max == 0.0f) ? (_diff <= (delta)) : (_diff <= (delta) * _max);                                    \
-        if (!_ok)                                                                                                      \
-        {                                                                                                              \
-            prova_fail(__LINE__, __FILE__, #actual " ~= " #expected " (±" #delta ")");                                 \
-        }                                                                                                              \
-    } while (0)
-
-#define PROVA_ASSERT_NOT_EQUAL_FLOAT(expected, actual)                                                                 \
-    PROVA_ASSERT_NOT_EQUAL_FLOAT_WITHIN(PROVA_FLOAT_EPSILON, (expected), (actual))
-
-#define PROVA_ASSERT_NOT_EQUAL_FLOAT_WITHIN(delta, expected, actual)                                                   \
-    do                                                                                                                 \
-    {                                                                                                                  \
-        float _e = (float)(expected);                                                                                  \
-        float _a = (float)(actual);                                                                                    \
-        float _diff = fabsf(_a - _e);                                                                                  \
-        float _max = fmaxf(fabsf(_e), fabsf(_a));                                                                      \
-        bool _ok = (_max == 0.0f) ? (_diff > (delta)) : (_diff > (delta) * _max);                                      \
-        if (!_ok)                                                                                                      \
-        {                                                                                                              \
-            prova_fail(__LINE__, __FILE__, #actual " !~= " #expected " (±" #delta ")");                                \
-        }                                                                                                              \
-    } while (0)
-
-#define PROVA_ASSERT_EQUAL_STRING(expected, actual)                                                                    \
-    do                                                                                                                 \
-    {                                                                                                                  \
-        const char *_e = (expected);                                                                                   \
-        const char *_a = (actual);                                                                                     \
-        bool _ok = (_e == _a) || (_e && _a && strcmp(_e, _a) == 0);                                                    \
-        if (!_ok)                                                                                                      \
-        {                                                                                                              \
-            prova_fail(__LINE__, __FILE__, "strcmp(" #actual ", " #expected ") == 0");                                 \
-        }                                                                                                              \
-    } while (0)
-
-#define PROVA_ASSERT_EQUAL_STRING_LENGTH(expected, actual)                                                             \
-    do                                                                                                                 \
-    {                                                                                                                  \
-        const char *_e = (expected);                                                                                   \
-        const char *_a = (actual);                                                                                     \
-        bool _ok = (strlen(expected) == strlen(actual));                                                               \
-        if (!_ok)                                                                                                      \
-        {                                                                                                              \
-            prova_fail(__LINE__, __FILE__,                                                                             \
-                       "strlen(" #actual ")"                                                                           \
-                       " == "                                                                                          \
-                       "strlen(" #expected ")");                                                                       \
-        }                                                                                                              \
-    } while (0)
-
-#define PROVA_ASSERT_NOT_EQUAL_STRING(expected, actual)                                                                \
-    do                                                                                                                 \
-    {                                                                                                                  \
-        const char *_e = (expected);                                                                                   \
-        const char *_a = (actual);                                                                                     \
-        bool _ok = (_e != _a) && (_e == NULL || _a == NULL || strcmp(_e, _a) != 0);                                    \
-        if (!_ok)                                                                                                      \
-        {                                                                                                              \
-            prova_fail(__LINE__, __FILE__, "strcmp(" #actual ", " #expected ") != 0");                                 \
-        }                                                                                                              \
-    } while (0)
-
-#define PROVA_ASSERT_NOT_EQUAL_STRING_LENGTH(expected, actual)                                                         \
-    do                                                                                                                 \
-    {                                                                                                                  \
-        const char *_e = (expected);                                                                                   \
-        const char *_a = (actual);                                                                                     \
-        bool _ok = (strlen(expected) != strlen(actual));                                                               \
-        if (!_ok)                                                                                                      \
-        {                                                                                                              \
-            prova_fail(__LINE__, __FILE__,                                                                             \
-                       "strlen(" #actual ")"                                                                           \
-                       " != "                                                                                          \
-                       "strlen(" #expected ")");                                                                       \
-        }                                                                                                              \
-    } while (0)
-
-#define PROVA_ASSERT_EQUAL_ARRAYS(expected, actual, n)                                                                 \
-    do                                                                                                                 \
-    {                                                                                                                  \
-        char _prova_array_assert_buffer[PROVA_ASSERT_ARRAY_BUFFER];                                                    \
-        for (size_t i = 0; i < n; ++i)                                                                                 \
-        {                                                                                                              \
-            if (expected[i] != actual[i])                                                                              \
-            {                                                                                                          \
-                snprintf(_prova_array_assert_buffer, PROVA_ASSERT_ARRAY_BUFFER,                                        \
-                         #actual "[%zu]"                                                                               \
-                                 " == " #expected "[%zu]",                                                             \
-                         i, i);                                                                                        \
-                prova_fail(__LINE__, __FILE__, _prova_array_assert_buffer);                                            \
-            }                                                                                                          \
-        }                                                                                                              \
-    } while (0);
-
-#define PROVA_ASSERT_NOT_EQUAL_ARRAYS(expected, actual, n)                                                             \
-    do                                                                                                                 \
-    {                                                                                                                  \
-        char _prova_array_assert_buffer[PROVA_ASSERT_ARRAY_BUFFER];                                                    \
-        for (size_t i = 0; i < n; ++i)                                                                                 \
-        {                                                                                                              \
-            if (expected[i] == actual[i])                                                                              \
-            {                                                                                                          \
-                snprintf(_prova_array_assert_buffer, PROVA_ASSERT_ARRAY_BUFFER,                                        \
-                         #actual "[%zu]"                                                                               \
-                                 " != " #expected "[%zu]",                                                             \
-                         i, i);                                                                                        \
-                prova_fail(__LINE__, __FILE__, _prova_array_assert_buffer);                                            \
-            }                                                                                                          \
-        }                                                                                                              \
-    } while (0)
-
-#define PROVA_ASSERT_EQUAL_MEMORY(expected, actual, n)                                                                 \
-    do                                                                                                                 \
-    {                                                                                                                  \
-        if (memcmp(expected, actual, n) != 0)                                                                          \
-        {                                                                                                              \
-            prova_fail(__LINE__, __FILE__,                                                                             \
-                       "#actual"                                                                                       \
-                       " == "                                                                                          \
-                       "#expected");                                                                                   \
-        }                                                                                                              \
-    } while (0);
-
-#define PROVA_ASSERT_NOT_EQUAL_MEMORY(expected, actual, n)                                                             \
-    do                                                                                                                 \
-    {                                                                                                                  \
-        if (memcmp(expected, actual, n) == 0)                                                                          \
-        {                                                                                                              \
-            prova_fail(__LINE__, __FILE__,                                                                             \
-                       "#actual"                                                                                       \
-                       " != "                                                                                          \
-                       "#expected");                                                                                   \
-        }                                                                                                              \
-    } while (0);
-
-/* ===  COMMON ASSERTION MACROS END  === */
+#define PTEST_REGISTER(f_name, message, test_flag)                             \
+  void test_method_##f_name(void);                                             \
+  __attribute__((constructor)) void register_##f_name(void) {                  \
+    static ProvaTest t;                                                        \
+    t.status = test_flag;                                                      \
+    t.test_name = #f_name;                                                     \
+    t.test_message = message;                                                  \
+    t.test_method = test_method_##f_name;                                      \
+    stbds_arrput(PROVA_TEST_QUEUE, t);					\
+  }                                                                            \
+  void test_method_##f_name(void)
 
 #endif /* PROVA_H */
