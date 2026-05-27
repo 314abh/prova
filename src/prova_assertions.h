@@ -1,30 +1,50 @@
+/* Copyright 2026 Abhigyan Kumar <314abh at gmail dot com>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #ifndef PROVA_ASSERTIONS_H
 #define PROVA_ASSERTIONS_H
 
-#include "prova.h"
 #include "prova_defs.h"
+#include "prova_logs.h"
 
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <math.h>
+#include <assert.h>
 
 static inline void prova_record_assertion(size_t line, const char *filename,
-                                          const char *expr, bool passed) {
+                                           const char *expr, bool passed) {
   if (PROVA_CURRENT_TEST == NULL)
     return;
 
   // prepare the assertion
-  ProvaAssertion assert = {0};
-  assert.line = line;
-  assert.status = passed ? TEST_PASS : TEST_FAIL;
-  strncpy(assert.expr, expr, PROVA_EXPR_LEN_MAX);
-  strncpy(assert.filename, filename, PROVA_FILENAME_MAX);
+  ProvaAssertion assertion = {0};
+  assertion.line = line;
+  assertion.status = passed ? TEST_PASS : TEST_FAIL;
+  strncpy(assertion.expr, expr, PROVA_EXPR_LEN_MAX);
+  strncpy(assertion.filename, filename, PROVA_FILENAME_MAX);
 
   // append the assertion to the assertions array in test case being
   // executed in the current thread. PROVA_CURRENT_TEST is a thread
   // local global state.
   ProvaTest *current_test = PROVA_CURRENT_TEST;
-  stbds_arrput(current_test->asserts, assert);
+  stbds_arrput(current_test->asserts, assertion);
+  
+  // Log the assertion
+  prova_log_assert(filename, line, expr, passed);
 }
 
 /* === common ASSERTION MACROS START === */
