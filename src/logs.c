@@ -19,7 +19,7 @@
  *
  * Reviewed by @314abh */
 
-#include "prova_logs.h"
+#include "logs.h"
 
 #include <threads.h>
 #include <string.h>

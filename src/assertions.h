@@ -16,8 +16,8 @@
 #ifndef PROVA_ASSERTIONS_H
 #define PROVA_ASSERTIONS_H
 
-#include "prova_defs.h"
-#include "prova_logs.h"
+#include "defs.h"
+#include "logs.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -42,7 +42,7 @@ static inline void prova_record_assertion(size_t line, const char *filename,
   // local global state.
   ProvaTest *current_test = PROVA_CURRENT_TEST;
   stbds_arrput(current_test->asserts, assertion);
-  
+
   // Log the assertion
   prova_log_assert(filename, line, expr, passed);
 }

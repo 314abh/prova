@@ -15,7 +15,7 @@
 
 #define STB_DS_IMPLEMENTATION
 #include "prova.h"
-#include "prova_logs.h"
+#include "logs.h"
 
 #define STB_SPRINTF_DECORATE(name) stb_##name
 #include "stb_sprintf.h"
@@ -38,7 +38,7 @@ static inline const char *prova_status_to_str(ProvaTest *test);
 
 static inline const char *prova_status_to_str(ProvaTest *test) {
   static const char untagged[] = "[UNTAGGED]";
-  
+
   switch (test->status) {
   case TEST_PENDING:
     return PROVA_PENDING_TAG;
@@ -179,7 +179,7 @@ static void prova_launch_tests(void) {
   size_t test_queue_length = stbds_arrlenu(PROVA_TEST_QUEUE);
 
   ProvaTest **running_tests = NULL;
-  
+
   while (launched < test_queue_length || running) {
     /* fill available slots */
     while (launched < test_queue_length && stbds_arrlenu(running_tests) < PROVA_MAX_CONCURRENT) {
@@ -194,7 +194,7 @@ static void prova_launch_tests(void) {
     int wstatus;
     pid_t pid = waitpid(-1, &wstatus, 0);
     assert(pid > 0 && "prova_launch_tests: couldn't collect child process.");
-    
+
     /* identify an exiting test */
     for (size_t i = 0; i < stbds_arrlenu(running_tests); ++i) {
       /* TODO: replace linear search with hash table

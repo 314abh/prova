@@ -16,8 +16,8 @@
 #ifndef PROVA_H
 #define PROVA_H
 
-#include "prova_defs.h"
-#include "prova_assertions.h"
+#include "defs.h"
+#include "assertions.h"
 
 #include <threads.h>
 
