@@ -13,6 +13,9 @@
  * limitations under the License.
  */
 
+#include <stddef.h>
+#include <stdint.h>
+#include <unistd.h>
 #define STB_DS_IMPLEMENTATION
 #include "prova.h"
 #include "logs.h"
@@ -30,12 +33,48 @@
 ProvaTest *PROVA_TEST_QUEUE = NULL;
 ProvaTest *PROVA_CURRENT_TEST = NULL;
 
+/* for inter-process test data sharing */
+static ssize_t prova_read(int fd, const void *buff, size_t count);
+static ssize_t prova_write(int fd, const void *buff, size_t count);
+
 static void prova_launch_tests(void);
 static void prova_log_result(ProvaTest *test);
 static void prova_exec_test(ProvaTest *test);
 static void prova_collect_test(ProvaTest *test, int wstatus);
 
 static inline const char *prova_status_to_str(ProvaTest *test);
+
+static ssize_t prova_read(int fd, const void *buff, size_t count) {
+    if (count <= 0 || buff == NULL) return 0;
+
+    size_t bytes_read = 0;
+    while (bytes_read < count) {
+        ssize_t ret = read(fd, (char*) buff + bytes_read, count - bytes_read);
+        if (ret <= 0) {
+            perror("prova_read: couldn't read data from child. exiting ...\n");
+            return -1;
+        }
+        bytes_read += ret;
+    }
+
+    return bytes_read;
+}
+
+static ssize_t prova_write(int fd, const void *buff, size_t count) {
+    if (count <= 0 || buff == NULL) return 0;
+
+    size_t bytes_written = 0;
+    while (bytes_written < count) {
+        ssize_t ret = write(fd, (char*) buff + bytes_written, count - bytes_written);
+        if (ret <= 0) {
+            perror("prova_write: couldn't write data to parent. exiting ...\n");
+            return -1;
+        }
+        bytes_written += ret;
+    }
+
+    return bytes_written;
+}
 
 static inline const char *prova_status_to_str(ProvaTest *test) {
   static const char untagged[] = "[UNTAGGED]";
@@ -115,8 +154,8 @@ static void prova_exec_test(ProvaTest *test) {
     PROVA_CURRENT_TEST = test;
     test->test_method(); /* test->asserts has been populated */
     size_t count = stbds_arrlen(test->asserts);
-    write(writefd, &count, sizeof(count));
-    write(writefd, test->asserts, count * sizeof(*test->asserts));
+    prova_write(writefd, &count, sizeof(count));
+    prova_write(writefd, test->asserts, count * sizeof(*test->asserts));
 
     close(writefd);
     _exit(0);
@@ -146,9 +185,9 @@ static void prova_collect_test(ProvaTest *test, int wstatus) {
 
   /* Child exited normally — read assertions */
   if (readfd >= 0) {
-    if (read(readfd, &count, sizeof(count)) > 0) {
+    if (prova_read(readfd, &count, sizeof(count)) > 0) {
       stbds_arrsetlen(test->asserts, count);
-      read(readfd, test->asserts, count * sizeof(*test->asserts));
+      prova_read(readfd, test->asserts, count * sizeof(*test->asserts));
     } else {
       /* No data written by child — treat as zero assertions */
       stbds_arrsetlen(test->asserts, 0);
