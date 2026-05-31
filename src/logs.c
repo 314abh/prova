@@ -21,14 +21,14 @@
 
 #include "logs.h"
 
-#include <threads.h>
-#include <string.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
+#include <string.h>
 #include <sys/types.h>
+#include <threads.h>
+#include <unistd.h>
 
 /* stb_sprintf header-only implementation */
 #define STB_SPRINTF_DECORATE(name) stb_##name
@@ -39,13 +39,13 @@
  * Producer (main/test threads): lock-free write to tail
  * Consumer (logger thread): reads from head
  */
-#define PROVA_LOG_BUFSIZE (1024 * 64)      /* 64KB ring buffer */
-#define PROVA_LOG_MSGMAX 512                /* max bytes per message */
+#define PROVA_LOG_BUFSIZE (1024 * 64) /* 64KB ring buffer */
+#define PROVA_LOG_MSGMAX 512          /* max bytes per message */
 
 typedef struct {
-  char buf[PROVA_LOG_BUFSIZE];              /* ring buffer */
-  volatile size_t head;                     /* consumer read pos */
-  volatile size_t tail;                     /* producer write pos */
+  char buf[PROVA_LOG_BUFSIZE]; /* ring buffer */
+  volatile size_t head;        /* consumer read pos */
+  volatile size_t tail;        /* producer write pos */
 } LogRing;
 
 typedef struct {
@@ -53,13 +53,13 @@ typedef struct {
   int active;
   thrd_t tid;
   LogRing ring;
-  mtx_t mx;                                 /* protects shutdown */
-  cnd_t cv;                                 /* signals flush/shutdown */
+  mtx_t mx; /* protects shutdown */
+  cnd_t cv; /* signals flush/shutdown */
 } LogCtx;
 
 ProvaLog prova_log_ctx = {NULL, 0};
 static LogCtx log_ctx_priv;
-static pid_t log_pid;  /* Parent PID; after fork, children have different PID */
+static pid_t log_pid; /* Parent PID; after fork, children have different PID */
 
 /* Logger thread main loop.
  * Consumes from ring buffer, writes to destination.
@@ -77,8 +77,9 @@ static int log_thread_main(void *arg) {
       /* Ring empty, wait for signal or timeout */
       mtx_lock(&ctx->mx);
       if (ctx->ring.head == ctx->ring.tail && ctx->active) {
-        cnd_timedwait(&ctx->cv, &ctx->mx, &(struct timespec){
-            .tv_sec = 0, .tv_nsec = 10000000}); /* 10ms timeout */
+        cnd_timedwait(&ctx->cv, &ctx->mx,
+                      &(struct timespec){
+                          .tv_sec = 0, .tv_nsec = 10000000}); /* 10ms timeout */
       }
       mtx_unlock(&ctx->mx);
       continue;
@@ -124,8 +125,8 @@ static size_t log_enqueue(const char *msg, size_t len) {
 
   size_t tail = ctx->ring.tail;
   size_t need = len + 1; /* +1 for length prefix */
-  size_t avail = (ctx->ring.head + PROVA_LOG_BUFSIZE - tail - 1) %
-                 PROVA_LOG_BUFSIZE;
+  size_t avail =
+      (ctx->ring.head + PROVA_LOG_BUFSIZE - tail - 1) % PROVA_LOG_BUFSIZE;
 
   if (avail < need) {
     /* Buffer full, drop oldest messages */
@@ -202,8 +203,7 @@ void prova_log(const char *fmt, ...) {
   }
 }
 
-void prova_log_test(const char *name, int passed, int total,
-                    const char *msg) {
+void prova_log_test(const char *name, int passed, int total, const char *msg) {
   if (!log_ctx_priv.active || getpid() != log_pid)
     return;
 
@@ -215,8 +215,8 @@ void prova_log_test(const char *name, int passed, int total,
     len = stb_snprintf(buf, PROVA_LOG_MSGMAX, "[%s] %s: %s (%d/%d)\n", name,
                        status, msg, passed, total);
   } else {
-    len = stb_snprintf(buf, PROVA_LOG_MSGMAX, "[%s] %s (%d/%d)\n", name,
-                       status, passed, total);
+    len = stb_snprintf(buf, PROVA_LOG_MSGMAX, "[%s] %s (%d/%d)\n", name, status,
+                       passed, total);
   }
 
   if (len > 0 && len < PROVA_LOG_MSGMAX) {
@@ -246,7 +246,7 @@ void prova_log_fini(void) {
   /* Signal logger thread to finish */
   mtx_lock(&log_ctx_priv.mx);
   log_ctx_priv.active = 0;
-  cnd_broadcast(&log_ctx_priv.cv);  /* Wake up thread if waiting */
+  cnd_broadcast(&log_ctx_priv.cv); /* Wake up thread if waiting */
   mtx_unlock(&log_ctx_priv.mx);
 
   /* Wait for logger thread to drain ring buffer and exit */

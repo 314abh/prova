@@ -19,9 +19,10 @@
 
 #define STB_SPRINTF_DECORATE(name) stb_##name
 #include "stb_sprintf.h"
+
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <assert.h>
 
 // Once the registry of tests is prepared, we can launch test cases as
 // separate child processes. That's what prova_launch_tests does.
@@ -63,22 +64,26 @@ static void prova_log_result(ProvaTest *test) {
 
   if (test->status == TEST_FAIL) {
     for (size_t i = 0; i < ntotal; ++i)
-      if (test->asserts[i].status == TEST_FAIL) nfail++;
+      if (test->asserts[i].status == TEST_FAIL)
+        nfail++;
   }
 
   /* Build one big string and log it once */
   if (test->status == TEST_FAIL && nfail > 0) {
-    /* Headline + each failing expr: "  [FAILED] name : file\n    expr\n    expr\n" */
+    /* Headline + each failing expr: "  [FAILED] name : file\n    expr\n expr\n"
+     */
     size_t sz = PROVA_FAIL_MSG_MAX + PROVA_FILENAME_MAX +
                 nfail * (PROVA_EXPR_LEN_MAX + 4);
     char *buf = (char *)malloc(sz);
-    if (!buf) return;
+    if (!buf)
+      return;
 
-    size_t pos = stb_snprintf(buf, sz, "  %s %s : %s\n", tag,
-                                test->test_name, test->asserts[0].filename);
+    size_t pos = stb_snprintf(buf, sz, "  %s %s : %s\n", tag, test->test_name,
+                              test->asserts[0].filename);
     for (size_t i = 0; i < ntotal; ++i) {
       ProvaAssertion *a = &test->asserts[i];
-      if (a->status != TEST_FAIL) continue;
+      if (a->status != TEST_FAIL)
+        continue;
       pos += stb_snprintf(buf + pos, sz - pos, "    %s\n", a->expr);
     }
 
@@ -131,7 +136,8 @@ static void prova_collect_test(ProvaTest *test, int wstatus) {
     test->status = TEST_CRASH;
 
     /* Cleanup pipe state */
-    if (readfd >= 0) close(readfd);
+    if (readfd >= 0)
+      close(readfd);
     test->readfd = -1;
     test->child_pid = 0;
     prova_log_result(test);
@@ -182,15 +188,19 @@ static void prova_launch_tests(void) {
 
   while (launched < test_queue_length || running) {
     /* fill available slots */
-    while (launched < test_queue_length && stbds_arrlenu(running_tests) < PROVA_MAX_CONCURRENT) {
+    while (launched < test_queue_length &&
+           stbds_arrlenu(running_tests) < PROVA_MAX_CONCURRENT) {
       ProvaTest *ct = &PROVA_TEST_QUEUE[launched];
-      if (ct->status == TEST_SKIP) prova_log_result(ct);
+      if (ct->status == TEST_SKIP)
+        prova_log_result(ct);
       prova_exec_test(ct);
       stbds_arrput(running_tests, ct);
-      launched++; running++;
+      launched++;
+      running++;
     }
 
-    if (running == 0) continue;
+    if (running == 0)
+      continue;
     int wstatus;
     pid_t pid = waitpid(-1, &wstatus, 0);
     assert(pid > 0 && "prova_launch_tests: couldn't collect child process.");
@@ -204,9 +214,10 @@ static void prova_launch_tests(void) {
        * a hash table is most optimal. */
       ProvaTest *test = running_tests[i];
       if (test->child_pid == pid) {
-	prova_collect_test(test, wstatus);
-	stbds_arrdel(running_tests, i);
-	running--; break;
+        prova_collect_test(test, wstatus);
+        stbds_arrdel(running_tests, i);
+        running--;
+        break;
       }
     }
   }
@@ -220,11 +231,20 @@ int main(void) {
   size_t passed = 0, failed = 0, crashed = 0, skipped = 0;
   for (size_t i = 0; i < total; ++i) {
     switch (PROVA_TEST_QUEUE[i].status) {
-    case TEST_PASS:  passed++;  break;
-    case TEST_FAIL:  failed++;  break;
-    case TEST_CRASH: crashed++; break;
-    case TEST_SKIP:  skipped++; break;
-    default: break;
+    case TEST_PASS:
+      passed++;
+      break;
+    case TEST_FAIL:
+      failed++;
+      break;
+    case TEST_CRASH:
+      crashed++;
+      break;
+    case TEST_SKIP:
+      skipped++;
+      break;
+    default:
+      break;
     }
   }
   prova_log("\nResults: %zu/%zu passed, %zu failed, %zu crashed, %zu skipped\n",
