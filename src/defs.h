@@ -28,8 +28,8 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include <unistd.h>
 #include <sys/wait.h>
+#include <unistd.h>
 
 extern struct ProvaTest *PROVA_TEST_QUEUE;
 extern struct ProvaTest *PROVA_CURRENT_TEST;
@@ -45,7 +45,7 @@ typedef enum ProvaStatus {
   TEST_CRASH,
 } ProvaStatus;
 
-typedef struct __attribute__ ((packed)) ProvaAssertion {
+typedef struct __attribute__((packed)) ProvaAssertion {
   uint32_t line;
   uint32_t status;
   char expr[PROVA_EXPR_LEN_MAX];

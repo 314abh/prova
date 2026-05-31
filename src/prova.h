@@ -16,8 +16,8 @@
 #ifndef PROVA_H
 #define PROVA_H
 
-#include "defs.h"
 #include "assertions.h"
+#include "defs.h"
 
 #include <threads.h>
 
@@ -48,7 +48,7 @@
     t.test_name = #f_name;                                                     \
     t.test_message = message;                                                  \
     t.test_method = test_method_##f_name;                                      \
-    stbds_arrput(PROVA_TEST_QUEUE, t);					\
+    stbds_arrput(PROVA_TEST_QUEUE, t);                                         \
   }                                                                            \
   void test_method_##f_name(void)
 

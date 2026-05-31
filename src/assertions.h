@@ -19,14 +19,14 @@
 #include "defs.h"
 #include "logs.h"
 
+#include <assert.h>
+#include <math.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdbool.h>
-#include <math.h>
-#include <assert.h>
 
 static inline void prova_record_assertion(size_t line, const char *filename,
-                                           const char *expr, bool passed) {
+                                          const char *expr, bool passed) {
   if (PROVA_CURRENT_TEST == NULL)
     return;
 

@@ -22,8 +22,8 @@
 #ifndef PROVA_LOGS_H
 #define PROVA_LOGS_H
 
-#include <stdio.h>
 #include <stddef.h>
+#include <stdio.h>
 
 /* Asynchronous logging system for Prova test framework.
  *
@@ -34,8 +34,8 @@
  */
 
 typedef struct {
-  FILE *dst;          /* destination: stdout, stderr, or file handle */
-  int active;         /* logger thread running flag */
+  FILE *dst;  /* destination: stdout, stderr, or file handle */
+  int active; /* logger thread running flag */
 } ProvaLog;
 
 extern ProvaLog prova_log_ctx;
@@ -53,7 +53,8 @@ void prova_log_init(FILE *out);
 void prova_log(const char *fmt, ...);
 
 /* Log test result (convenience function).
- * Formats: "[TEST_NAME] status msg" or "[TEST_NAME] status: msg (N assertions)".
+ * Formats: "[TEST_NAME] status msg" or "[TEST_NAME] status: msg (N
+ * assertions)".
  */
 void prova_log_test(const char *name, int passed, int total, const char *msg);
 
