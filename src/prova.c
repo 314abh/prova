@@ -13,6 +13,9 @@
  * limitations under the License.
  */
 
+#include <stddef.h>
+#include <stdint.h>
+#include <unistd.h>
 #define STB_DS_IMPLEMENTATION
 #include "prova.h"
 #include "logs.h"
@@ -30,12 +33,53 @@
 ProvaTest *PROVA_TEST_QUEUE = NULL;
 ProvaTest *PROVA_CURRENT_TEST = NULL;
 
+struct TestHeader {
+    uint32_t tests_count;
+    uint32_t payload_size;
+};
+
+/* for inter-process test data sharing */
+static ssize_t prova_read(int fd, const void *buff, size_t count);
+static ssize_t prova_write(int fd, const void *buff, size_t count);
+
 static void prova_launch_tests(void);
 static void prova_log_result(ProvaTest *test);
 static void prova_exec_test(ProvaTest *test);
 static void prova_collect_test(ProvaTest *test, int wstatus);
 
 static inline const char *prova_status_to_str(ProvaTest *test);
+
+static ssize_t prova_read(int fd, const void *buff, size_t count) {
+    if (count <= 0 || buff == NULL) return 0;
+
+    size_t bytes_read = 0;
+    while (bytes_read < count) {
+        ssize_t ret = read(fd, (char*) buff + bytes_read, count - bytes_read);
+        if (ret <= 0) {
+            perror("prova_read: couldn't read data from child. exiting ...\n");
+            return -1;
+        }
+        bytes_read += ret;
+    }
+
+    return bytes_read;
+}
+
+static ssize_t prova_write(int fd, const void *buff, size_t count) {
+    if (count <= 0 || buff == NULL) return 0;
+
+    size_t bytes_written = 0;
+    while (bytes_written < count) {
+        ssize_t ret = read(fd, (char*) buff + bytes_written, count - bytes_written);
+        if (ret <= 0) {
+            perror("prova_write: couldn't write data to parent. exiting ...\n");
+            return -1;
+        }
+        bytes_written += ret;
+    }
+
+    return bytes_written;
+}
 
 static inline const char *prova_status_to_str(ProvaTest *test) {
   static const char untagged[] = "[UNTAGGED]";
