@@ -33,11 +33,6 @@
 ProvaTest *PROVA_TEST_QUEUE = NULL;
 ProvaTest *PROVA_CURRENT_TEST = NULL;
 
-struct TestHeader {
-    uint32_t tests_count;
-    uint32_t payload_size;
-};
-
 /* for inter-process test data sharing */
 static ssize_t prova_read(int fd, const void *buff, size_t count);
 static ssize_t prova_write(int fd, const void *buff, size_t count);
@@ -70,7 +65,7 @@ static ssize_t prova_write(int fd, const void *buff, size_t count) {
 
     size_t bytes_written = 0;
     while (bytes_written < count) {
-        ssize_t ret = read(fd, (char*) buff + bytes_written, count - bytes_written);
+        ssize_t ret = write(fd, (char*) buff + bytes_written, count - bytes_written);
         if (ret <= 0) {
             perror("prova_write: couldn't write data to parent. exiting ...\n");
             return -1;
@@ -159,8 +154,8 @@ static void prova_exec_test(ProvaTest *test) {
     PROVA_CURRENT_TEST = test;
     test->test_method(); /* test->asserts has been populated */
     size_t count = stbds_arrlen(test->asserts);
-    write(writefd, &count, sizeof(count));
-    write(writefd, test->asserts, count * sizeof(*test->asserts));
+    prova_write(writefd, &count, sizeof(count));
+    prova_write(writefd, test->asserts, count * sizeof(*test->asserts));
 
     close(writefd);
     _exit(0);
@@ -190,9 +185,9 @@ static void prova_collect_test(ProvaTest *test, int wstatus) {
 
   /* Child exited normally — read assertions */
   if (readfd >= 0) {
-    if (read(readfd, &count, sizeof(count)) > 0) {
+    if (prova_read(readfd, &count, sizeof(count)) > 0) {
       stbds_arrsetlen(test->asserts, count);
-      read(readfd, test->asserts, count * sizeof(*test->asserts));
+      prova_read(readfd, test->asserts, count * sizeof(*test->asserts));
     } else {
       /* No data written by child — treat as zero assertions */
       stbds_arrsetlen(test->asserts, 0);
