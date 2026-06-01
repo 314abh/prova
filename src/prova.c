@@ -260,6 +260,7 @@ static void prova_launch_tests(void) {
       }
     }
   }
+  stbds_arrfreef(running_tests);
 }
 
 int main(void) {
