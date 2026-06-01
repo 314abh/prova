@@ -441,7 +441,7 @@ STBSP__PUBLICDEF int STB_SPRINTF_DECORATE(vsprintfcb)(STBSP_SPRINTFCB *callback,
         } else
 #endif
         {
-          *(stbsp__uint32 *)bf = v;
+          memcpy(bf, &v, sizeof(stbsp__uint32));
         }
         bf += 4;
         f += 4;
